@@ -20,12 +20,29 @@ exports.createPost = async (req, res) => {
 
 exports.getAllPosts = async (req, res) => {
     try {
-        const posts = await Post.find().populate("author", "name email");
-        res.json(posts);
+        const page = parseInt(req.query.page) || 1;        // Default to page 1
+        const limit = parseInt(req.query.limit) || 10;     // Default to 10 posts per page
+        const skip = (page - 1) * limit;
+
+        const posts = await Post.find()
+            .sort({ createdAt: -1 }) // newest first
+            .skip(skip)
+            .limit(limit)
+            .populate("author", "name email");
+
+        const total = await Post.countDocuments();
+
+        res.json({
+            page,
+            totalPages: Math.ceil(total / limit),
+            totalPosts: total,
+            posts
+        });
     } catch (error) {
         res.status(500).json({ msg: error.message });
     }
 };
+
 
 exports.updatePost=async(req,res)=>{
     try{
@@ -61,3 +78,37 @@ exports.deletePost=async(req,res)=>{
         res.status(500).json({ msg: error.message });
     }
 }
+
+exports.searchPosts = async (req, res) => {
+    try {
+        const { keyword } = req.query;
+        const page = parseInt(req.query.page) || 1;
+        const limit = parseInt(req.query.limit) || 10;
+        const skip = (page - 1) * limit;
+
+        const query = {
+            $or: [
+                { title: { $regex: keyword, $options: "i" } },
+                { content: { $regex: keyword, $options: "i" } },
+                { tags: { $regex: keyword, $options: "i" } }
+            ]
+        };
+
+        const posts = await Post.find(query)
+            .sort({ createdAt: -1 })
+            .skip(skip)
+            .limit(limit)
+            .populate("author", "name email");
+
+        const total = await Post.countDocuments(query);
+
+        res.json({
+            page,
+            totalPages: Math.ceil(total / limit),
+            totalPosts: total,
+            posts
+        });
+    } catch (error) {
+        res.status(500).json({ msg: error.message });
+    }
+};
